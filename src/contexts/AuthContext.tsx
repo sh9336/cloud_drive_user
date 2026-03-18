@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authApi, AuthResponse } from '@/lib/api';
+import { storage } from '@/config';
 
 interface User {
   id: string;
@@ -24,16 +25,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Check for existing session
-    const token = localStorage.getItem('access_token');
-    const storedUser = localStorage.getItem('user');
+    const token = storage.getItem('access_token');
+    const storedUser = storage.getItem('user');
 
     if (token && storedUser) {
       try {
         setUser(JSON.parse(storedUser));
       } catch {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('user');
+        storage.removeItem('access_token');
+        storage.removeItem('refresh_token');
+        storage.removeItem('user');
       }
     }
 
@@ -53,9 +54,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     const response: AuthResponse = await authApi.login({ email, password });
 
-    localStorage.setItem('access_token', response.access_token);
+    storage.setItem('access_token', response.access_token);
     if (response.refresh_token) {
-      localStorage.setItem('refresh_token', response.refresh_token);
+      storage.setItem('refresh_token', response.refresh_token);
     }
 
     const userData: User = response.user || {
@@ -63,12 +64,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email: email,
     };
 
-    localStorage.setItem('user', JSON.stringify(userData));
+    storage.setItem('user', JSON.stringify(userData));
     setUser(userData);
   }, []);
 
   const logout = useCallback(async () => {
-    const refreshToken = localStorage.getItem('refresh_token');
+    const refreshToken = storage.getItem('refresh_token');
 
     if (refreshToken) {
       try {
@@ -78,9 +79,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
+    storage.removeItem('access_token');
+    storage.removeItem('refresh_token');
+    storage.removeItem('user');
     setUser(null);
   }, []);
 

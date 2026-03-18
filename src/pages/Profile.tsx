@@ -57,25 +57,25 @@ export default function Profile() {
   const { toast } = useToast();
 
   useEffect(() => {
-    fetchProfile();
-  }, []);
+    const fetchProfile = async () => {
+      try {
+        setIsLoading(true);
+        const data = await tenantApi.getProfile();
+        setProfile(data);
+      } catch (error) {
+        console.error('Failed to fetch profile:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load profile. Please try again.',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  const fetchProfile = async () => {
-    try {
-      setIsLoading(true);
-      const data = await tenantApi.getProfile();
-      setProfile(data);
-    } catch (error) {
-      console.error('Failed to fetch profile:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load profile. Please try again.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    fetchProfile();
+  }, [toast]);
 
   const handleChangePassword = async () => {
     setPasswordError('');
@@ -136,7 +136,7 @@ export default function Profile() {
       if (error instanceof Error) {
         errorMessage = error.message;
       } else if (typeof error === 'object' && error !== null && 'message' in error) {
-        errorMessage = String((error as any).message);
+        errorMessage = String((error as { message?: unknown }).message ?? '');
       } else if (typeof error === 'string') {
         errorMessage = error;
       }
@@ -169,39 +169,40 @@ export default function Profile() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-4 flex flex-col">
-        {/* Header - Minimalist */}
-        <div className="flex items-center justify-between px-1">
+      <div className="space-y-6 flex flex-col">
+        {/* Header - Clean & Modern */}
+        <div className="flex items-center justify-between gap-4">
           <div>
-            <h2 className="text-xl font-semibold tracking-tight">Profile Settings</h2>
+            <h2 className="text-3xl font-bold tracking-tight text-foreground">Profile Settings</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Manage your account and security preferences</p>
           </div>
           <Button
             variant="outline"
-            size="sm"
+            size="icon"
             onClick={() => setChangePasswordDialogOpen(true)}
-            className="h-8 text-xs font-medium"
+            className="h-9 w-9 hover:bg-white transition-colors"
+            title="Change password"
           >
-            <Key className="mr-2 h-3.5 w-3.5" />
-            Change Password
+            <Key className="h-4 w-4" />
           </Button>
         </div>
 
-        {/* Profile Content - Minimalist List */}
-        <div className="rounded-lg border bg-card/50 shadow-sm overflow-hidden text-sm">
+        {/* Profile Content - Modern Card */}
+        <div className="rounded-lg border bg-card/50 shadow-sm overflow-hidden">
           {/* Section 1: Identity */}
-          <div className="p-6 flex items-start gap-6 border-b border-border/50 bg-background/50">
-            <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+          <div className="p-7 flex items-start gap-6 border-b border-border/50 bg-background/50">
+            <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
               <User className="h-8 w-8" />
             </div>
-            <div className="space-y-1">
-              <h3 className="text-lg font-medium text-foreground">{profile.full_name}</h3>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Mail className="h-4 w-4" />
+            <div className="space-y-2 flex-1">
+              <h3 className="text-xl font-bold text-foreground">{profile.full_name}</h3>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Mail className="h-4 w-4 flex-shrink-0" />
                 <span>{profile.email}</span>
               </div>
-              <div className="flex items-center gap-2 text-muted-foreground pt-1">
-                <span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border", profile.is_active ? "bg-green-500/10 text-green-600 border-green-500/20" : "bg-destructive/10 text-destructive border-destructive/20")}>
-                  <span className={cn("h-1.5 w-1.5 rounded-full", profile.is_active ? "bg-green-500" : "bg-destructive")} />
+              <div className="flex items-center gap-2 pt-1.5">
+                <span className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border", profile.is_active ? "bg-green-500/10 text-green-600 border-green-500/30" : "bg-destructive/10 text-destructive border-destructive/30")}>
+                  <span className={cn("h-2 w-2 rounded-full", profile.is_active ? "bg-green-500" : "bg-destructive")} />
                   {profile.is_active ? 'Active Account' : 'Inactive'}
                 </span>
               </div>
@@ -210,32 +211,31 @@ export default function Profile() {
 
           {/* Section 2: Details Grid */}
           <div className="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border/50">
-            <div className="p-6 space-y-4">
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Company Details</h4>
-              <div className="space-y-3">
-                <div className="grid grid-cols-3 gap-2">
-                  <span className="text-muted-foreground text-xs">Company</span>
-                  <span className="col-span-2 font-medium">{profile.company_name}</span>
+            <div className="p-7 space-y-5">
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Company Details</h4>
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-3">
+                  <span className="text-muted-foreground text-xs font-medium">Company</span>
+                  <span className="col-span-2 font-semibold text-foreground">{profile.company_name}</span>
                 </div>
-
               </div>
             </div>
 
-            <div className="p-6 space-y-4">
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Account Activity</h4>
-              <div className="space-y-3">
-                <div className="grid grid-cols-3 gap-2">
-                  <span className="text-muted-foreground text-xs">Created</span>
-                  <span className="col-span-2">{formatDate(profile.created_at)}</span>
+            <div className="p-7 space-y-5">
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Account Activity</h4>
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-3">
+                  <span className="text-muted-foreground text-xs font-medium">Created</span>
+                  <span className="col-span-2 font-medium text-foreground">{formatDate(profile.created_at)}</span>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <span className="text-muted-foreground text-xs">Last Login</span>
-                  <span className="col-span-2">{profile.last_login_at ? formatDate(profile.last_login_at) : 'Never'}</span>
+                <div className="grid grid-cols-3 gap-3">
+                  <span className="text-muted-foreground text-xs font-medium">Last Login</span>
+                  <span className="col-span-2 font-medium text-foreground">{profile.last_login_at ? formatDate(profile.last_login_at) : 'Never'}</span>
                 </div>
                 {profile.password_changed_at && (
-                  <div className="grid grid-cols-3 gap-2">
-                    <span className="text-muted-foreground text-xs">Pwd Changed</span>
-                    <span className="col-span-2">{formatDate(profile.password_changed_at)}</span>
+                  <div className="grid grid-cols-3 gap-3">
+                    <span className="text-muted-foreground text-xs font-medium">Pwd Changed</span>
+                    <span className="col-span-2 font-medium text-foreground">{formatDate(profile.password_changed_at)}</span>
                   </div>
                 )}
               </div>
@@ -244,8 +244,8 @@ export default function Profile() {
 
           {profile.must_change_password && (
             <div className="p-4 bg-yellow-500/10 border-t border-yellow-500/20 text-yellow-600 flex items-center gap-3">
-              <AlertCircle className="h-5 w-5" />
-              <span className="font-medium">Security Alert: You are required to change your password immediately.</span>
+              <AlertCircle className="h-5 w-5 flex-shrink-0" />
+              <span className="font-semibold text-sm">Security Alert: You are required to change your password immediately.</span>
             </div>
           )}
         </div>
@@ -253,28 +253,28 @@ export default function Profile() {
 
       <Dialog open={changePasswordDialogOpen} onOpenChange={setChangePasswordDialogOpen}>
         <DialogContent className="sm:max-w-md p-0 gap-0 overflow-hidden">
-          <DialogHeader className="p-4 pb-2 border-b bg-muted/20">
-            <DialogTitle className="text-sm font-semibold">Change Password</DialogTitle>
-            <DialogDescription className="text-xs">
+          <DialogHeader className="p-6 pb-4 border-b bg-muted/20 border-border/50">
+            <DialogTitle className="text-lg font-bold tracking-tight">Change Password</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground mt-1">
               Ensure your account is secure with a strong password.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="p-4 space-y-3">
+          <div className="p-6 space-y-4">
             {passwordError && (
-              <div className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+              <div className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 px-3.5 py-3 text-xs font-medium text-destructive">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                 {passwordError}
               </div>
             )}
 
-            <div className="space-y-1.5">
-              <Label htmlFor="currentPassword" className="text-xs font-medium text-muted-foreground">Current Password</Label>
+            <div className="space-y-2">
+              <Label htmlFor="currentPassword" className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Current Password</Label>
               <div className="relative">
                 <Input
                   id="currentPassword"
                   type={showCurrentPassword ? "text" : "password"}
-                  className="h-8 text-xs pr-8"
+                  className="h-9 text-sm pr-9"
                   placeholder="••••••••"
                   value={passwordData.currentPassword}
                   onChange={(e) =>
@@ -286,26 +286,26 @@ export default function Profile() {
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="absolute right-0 top-0 h-8 w-8 text-muted-foreground hover:text-foreground"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/50"
                   onClick={() => setShowCurrentPassword(!showCurrentPassword)}
                 >
                   {showCurrentPassword ? (
-                    <EyeOff className="h-3.5 w-3.5" />
+                    <EyeOff className="h-4 w-4" />
                   ) : (
-                    <Eye className="h-3.5 w-3.5" />
+                    <Eye className="h-4 w-4" />
                   )}
                 </Button>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="newPassword" className="text-xs font-medium text-muted-foreground">New Password</Label>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="newPassword" className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">New Password</Label>
                 <div className="relative">
                   <Input
                     id="newPassword"
                     type={showNewPassword ? "text" : "password"}
-                    className="h-8 text-xs pr-8"
+                    className="h-9 text-sm pr-9"
                     placeholder="Min 8 chars"
                     value={passwordData.newPassword}
                     onChange={(e) =>
@@ -317,25 +317,25 @@ export default function Profile() {
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="absolute right-0 top-0 h-8 w-8 text-muted-foreground hover:text-foreground"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/50"
                     onClick={() => setShowNewPassword(!showNewPassword)}
                   >
                     {showNewPassword ? (
-                      <EyeOff className="h-3.5 w-3.5" />
+                      <EyeOff className="h-4 w-4" />
                     ) : (
-                      <Eye className="h-3.5 w-3.5" />
+                      <Eye className="h-4 w-4" />
                     )}
                   </Button>
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="confirmPassword" className="text-xs font-medium text-muted-foreground">Confirm</Label>
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword" className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Confirm</Label>
                 <div className="relative">
                   <Input
                     id="confirmPassword"
                     type={showConfirmPassword ? "text" : "password"}
-                    className="h-8 text-xs pr-8"
+                    className="h-9 text-sm pr-9"
                     placeholder="Re-enter"
                     value={passwordData.confirmPassword}
                     onChange={(e) =>
@@ -347,21 +347,21 @@ export default function Profile() {
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="absolute right-0 top-0 h-8 w-8 text-muted-foreground hover:text-foreground"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/50"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   >
                     {showConfirmPassword ? (
-                      <EyeOff className="h-3.5 w-3.5" />
+                      <EyeOff className="h-4 w-4" />
                     ) : (
-                      <Eye className="h-3.5 w-3.5" />
+                      <Eye className="h-4 w-4" />
                     )}
                   </Button>
                 </div>
               </div>
             </div>
-            <div className="text-[10px] text-muted-foreground leading-tight pt-2 space-y-1">
-              <p className="font-medium">Requirements:</p>
-              <ul className="list-disc pl-3 space-y-0.5">
+            <div className="text-xs text-muted-foreground leading-relaxed pt-3 space-y-2 bg-muted/20 p-3 rounded-md">
+              <p className="font-semibold text-foreground">Password Requirements:</p>
+              <ul className="list-disc pl-4 space-y-1">
                 <li>At least 8 characters long</li>
                 <li>One uppercase & one lowercase letter</li>
                 <li>One number & one special character (@$!%*?&)</li>
@@ -369,7 +369,7 @@ export default function Profile() {
             </div>
           </div>
 
-          <DialogFooter className="p-3 bg-muted/20 border-t gap-2">
+          <DialogFooter className="p-4 bg-muted/20 border-t border-border/50 gap-2 sm:gap-3">
             <Button
               variant="outline"
               size="sm"
@@ -383,7 +383,7 @@ export default function Profile() {
                 setPasswordError('');
               }}
               disabled={isChangingPassword}
-              className="h-7 text-xs"
+              className="h-9 px-4 font-medium"
             >
               Cancel
             </Button>
@@ -391,11 +391,11 @@ export default function Profile() {
               onClick={handleChangePassword}
               disabled={isChangingPassword}
               size="sm"
-              className="h-7 text-xs px-4"
+              className="h-9 px-6 font-medium"
             >
               {isChangingPassword ? (
                 <>
-                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Updating...
                 </>
               ) : (

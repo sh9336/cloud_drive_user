@@ -26,12 +26,17 @@ import {
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+function formatDate(dateString: string | null | undefined): string {
+  if (!dateString) return 'N/A';
+  try {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  } catch {
+    return 'N/A';
+  }
 }
 
 function formatBytes(bytes: number): string {
@@ -42,8 +47,11 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-function isExpired(expiresAt: string): boolean {
-  return new Date(expiresAt) < new Date();
+function isExpired(expiresAt: string | null | undefined): boolean {
+  if (!expiresAt) return false;
+  const date = new Date(expiresAt);
+  if (Number.isNaN(date.getTime())) return false;
+  return date < new Date();
 }
 
 export default function SyncTokens() {
@@ -95,14 +103,15 @@ export default function SyncTokens() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-4 h-full flex flex-col">
-        {/* Header - Minimalist */}
-        <div className="flex items-center justify-between px-1">
+      <div className="space-y-6 h-full flex flex-col">
+        {/* Header - Clean & Modern */}
+        <div className="flex items-center justify-between gap-4">
           <div>
-            <h2 className="text-xl font-semibold tracking-tight">Sync Tokens</h2>
+            <h2 className="text-3xl font-bold tracking-tight text-foreground">Sync Tokens</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Manage API tokens for file synchronization</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={fetchTokens} className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground">
+            <Button variant="outline" size="icon" onClick={fetchTokens} className="h-9 w-9 hover:bg-muted/50 transition-colors" title="Refresh">
               <RefreshCw className="h-4 w-4" />
             </Button>
             {/* Provide 'Create Token' button if functionality existed, ensuring it matches style */}
@@ -115,22 +124,24 @@ export default function SyncTokens() {
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/30" />
           </div>
         ) : tokens.length === 0 ? (
-          <div className="flex-1 rounded-lg border bg-card/50 shadow-sm flex flex-col items-center justify-center text-center p-8">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-secondary/50">
-              <Key className="h-6 w-6 text-muted-foreground/40" />
+          <div className="flex-1 rounded-lg border bg-card/50 shadow-sm flex flex-col items-center justify-center text-center p-12 space-y-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-secondary/50">
+              <Key className="h-8 w-8 text-muted-foreground/40" />
             </div>
-            <h3 className="text-sm font-medium text-foreground">No sync tokens</h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Contact your administrator to create tokens.
-            </p>
+            <div>
+              <h3 className="text-lg font-semibold text-foreground">No sync tokens yet</h3>
+              <p className="mt-1.5 text-sm text-muted-foreground">
+                Contact your administrator to create API tokens for file synchronization.
+              </p>
+            </div>
           </div>
         ) : (
           <div className="rounded-lg border bg-card/50 shadow-sm flex flex-col">
-            <div className="px-4 py-2 border-b border-border/50 bg-muted/20 grid grid-cols-12 gap-4">
-              <div className="col-span-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Token Name</div>
-              <div className="col-span-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Permissions</div>
-              <div className="col-span-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</div>
-              <div className="col-span-2 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actions</div>
+            <div className="px-4 py-3.5 border-b border-border/50 bg-muted/20 grid grid-cols-12 gap-4">
+              <div className="col-span-4 text-xs font-semibold text-muted-foreground uppercase tracking-widest">Token Name</div>
+              <div className="col-span-3 text-xs font-semibold text-muted-foreground uppercase tracking-widest">Permissions</div>
+              <div className="col-span-3 text-xs font-semibold text-muted-foreground uppercase tracking-widest">Status</div>
+              <div className="col-span-2 text-right text-xs font-semibold text-muted-foreground uppercase tracking-widest">Actions</div>
             </div>
 
             <div className="divide-y divide-border/50">
@@ -139,28 +150,28 @@ export default function SyncTokens() {
                 return (
                   <div
                     key={token.id}
-                    className="group grid grid-cols-12 gap-4 items-center p-2.5 px-4 hover:bg-muted/40 transition-colors"
+                    className="group grid grid-cols-12 gap-4 items-center p-3.5 px-4 hover:bg-muted/40 transition-colors"
                   >
                     {/* Name & ID */}
                     <div className="col-span-4 min-w-0 pr-4">
                       <div className="flex items-center gap-3">
-                        <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded bg-secondary/30 transition-colors", expired ? "text-destructive" : "text-primary")}>
+                        <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded bg-secondary/30 group-hover:bg-primary/10 transition-all", expired ? "text-destructive" : "text-primary")}>
                           <Key className="h-4 w-4" />
                         </div>
                         <div className="min-w-0">
-                          <p className={cn("text-sm font-medium truncate", expired && "text-muted-foreground line-through decoration-destructive/50")}>{token.name}</p>
-                          <p className="text-[10px] text-muted-foreground font-mono truncate opacity-70">{token.id}</p>
+                          <p className={cn("text-sm font-semibold truncate group-hover:text-primary transition-colors", expired && "text-muted-foreground line-through decoration-destructive/50")}>{token.name}</p>
+                          <p className="text-xs text-muted-foreground font-mono truncate opacity-70">{token.id}</p>
                         </div>
                       </div>
                     </div>
 
                     {/* Permissions - Compact Badges */}
-                    <div className="col-span-3 flex items-center gap-1.5 flex-wrap">
+                    <div className="col-span-3 flex items-center gap-2 flex-wrap">
                       {['read', 'write', 'delete'].map((perm) => {
                         const hasPerm = token[`can_${perm}` as keyof SyncToken];
                         if (!hasPerm) return null;
                         return (
-                          <span key={perm} className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-secondary text-[10px] font-medium text-secondary-foreground capitalize border border-transparent group-hover:border-border/50 transition-colors">
+                          <span key={perm} className="inline-flex items-center px-2 py-1 rounded-full bg-primary/10 text-xs font-semibold text-primary capitalize border border-primary/20 group-hover:border-primary/40 transition-colors">
                             {perm}
                           </span>
                         )
@@ -169,28 +180,29 @@ export default function SyncTokens() {
 
                     {/* Status / Dates */}
                     <div className="col-span-3 min-w-0">
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center gap-1.5 text-xs">
-                          <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", expired ? "bg-destructive" : "bg-green-500")} />
-                          <span className={cn("font-medium", expired ? "text-destructive" : "text-foreground")}>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className={cn("h-2 w-2 rounded-full shrink-0", expired ? "bg-destructive" : "bg-green-500")} />
+                          <span className={cn("font-semibold", expired ? "text-destructive" : "text-foreground")}>
                             {expired ? 'Expired' : 'Active'}
                           </span>
                         </div>
-                        <p className="text-[10px] text-muted-foreground truncate">
+                        <p className="text-xs text-muted-foreground truncate">
                           Exp: {formatDate(token.expires_at)}
                         </p>
                       </div>
                     </div>
 
                     {/* Actions */}
-                    <div className="col-span-2 flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="col-span-2 flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 w-7 p-0"
+                        className="h-8 w-8 hover:bg-muted/50"
                         onClick={() => handleViewToken(token)}
+                        title="View details"
                       >
-                        <Eye className="h-3.5 w-3.5" />
+                        <Eye className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
@@ -206,145 +218,168 @@ export default function SyncTokens() {
         open={!!selectedToken}
         onOpenChange={() => setSelectedToken(null)}
       >
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Key className="h-5 w-5 text-primary" />
-              {selectedToken?.name}
-            </DialogTitle>
-            <DialogDescription>
-              Token details and usage statistics
-            </DialogDescription>
+        <DialogContent className="sm:max-w-lg p-0 overflow-hidden">
+          <DialogHeader className="bg-muted/20 -m-6 mb-4 p-6 pb-4 border-b border-border/50">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <DialogTitle className="flex items-center gap-2.5 text-lg font-bold tracking-tight">
+                  <Key className="h-5 w-5 text-primary" />
+                  {selectedToken?.name}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  Token details and usage statistics
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
 
           {selectedToken && (
-            <div className="space-y-6 pt-4">
-              {/* Token ID */}
-              <div>
-                <p className="mb-1.5 text-sm font-medium text-muted-foreground">
-                  Token ID
-                </p>
-                <code className="token-display block w-full overflow-x-auto">
-                  {selectedToken.id}
-                </code>
-              </div>
+            <div className="space-y-6 px-6 pb-6">
+              {/* Token ID + Permissions */}
+              <div className="rounded-lg border border-border/50 bg-card/50 p-5">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <p className="mb-1.5 text-sm font-medium text-muted-foreground">
+                      Token ID
+                    </p>
+                    <div className="rounded-md bg-muted/20 p-3 text-xs font-mono text-muted-foreground overflow-x-auto">
+                      {selectedToken.id}
+                    </div>
+                  </div>
 
-              {/* Permissions */}
-              <div>
-                <p className="mb-2 text-sm font-medium text-muted-foreground">
-                  Permissions
-                </p>
-                <div className="flex gap-2">
-                  {['read', 'write', 'delete'].map((perm) => {
-                    const hasPermission =
-                      selectedToken[`can_${perm}` as keyof SyncToken];
-                    return (
-                      <span
-                        key={perm}
-                        className={cn(
-                          'inline-flex items-center gap-1 rounded-full border px-3 py-1 text-sm font-medium capitalize',
-                          hasPermission ? 'status-active' : 'status-inactive'
-                        )}
-                      >
-                        {hasPermission ? (
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                        ) : (
-                          <XCircle className="h-3.5 w-3.5" />
-                        )}
-                        {perm}
-                      </span>
-                    );
-                  })}
+                  <div>
+                    <p className="mb-2 text-sm font-medium text-muted-foreground">
+                      Permissions
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {['read', 'write', 'delete'].map((perm) => {
+                        const hasPermission =
+                          selectedToken[`can_${perm}` as keyof SyncToken];
+                        return (
+                          <span
+                            key={perm}
+                            className={cn(
+                              'inline-flex items-center gap-1 rounded-full border px-3 py-1 text-sm font-medium capitalize',
+                              hasPermission ? 'status-active' : 'status-inactive'
+                            )}
+                          >
+                            {hasPermission ? (
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                            ) : (
+                              <XCircle className="h-3.5 w-3.5" />
+                            )}
+                            {perm}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Stats */}
-              <div>
-                <p className="mb-2 text-sm font-medium text-muted-foreground">
-                  Usage Statistics
-                </p>
-                {isLoadingStats ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                  </div>
-                ) : tokenStats ? (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-lg border border-border bg-secondary/30 p-3">
+              {/* Usage statistics */}
+              <div className="rounded-lg border border-border/50 bg-card/50 p-5">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-foreground">Usage Statistics</p>
+                  {isLoadingStats && (
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  )}
+                </div>
+
+                {tokenStats ? (
+                  <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="rounded-lg border border-border/50 bg-muted/30 p-4">
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Activity className="h-4 w-4" />
-                        <span className="text-xs">Total Requests</span>
+                        <span className="text-xs font-medium">Total Requests</span>
                       </div>
-                      <p className="mt-1 text-xl font-semibold text-foreground">
-                        {tokenStats.total_requests.toLocaleString()}
+                      <p className="mt-2 text-2xl font-bold text-foreground">
+                        {Number(tokenStats.total_requests ?? 0).toLocaleString()}
                       </p>
                     </div>
-                    <div className="rounded-lg border border-border bg-secondary/30 p-3">
+
+                    <div className="rounded-lg border border-border/50 bg-muted/30 p-4">
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <HardDrive className="h-4 w-4" />
-                        <span className="text-xs">Data Transferred</span>
+                        <span className="text-xs font-medium">Data Transferred</span>
                       </div>
-                      <p className="mt-1 text-xl font-semibold text-foreground">
+                      <p className="mt-2 text-2xl font-bold text-foreground">
                         {formatBytes(tokenStats.bytes_transferred)}
                       </p>
                     </div>
-                    <div className="rounded-lg border border-border bg-secondary/30 p-3">
+
+                    <div className="rounded-lg border border-border/50 bg-muted/30 p-4">
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Upload className="h-4 w-4" />
-                        <span className="text-xs">Files Uploaded</span>
+                        <span className="text-xs font-medium">Files Uploaded</span>
                       </div>
-                      <p className="mt-1 text-xl font-semibold text-foreground">
-                        {tokenStats.files_uploaded.toLocaleString()}
+                      <p className="mt-2 text-2xl font-bold text-foreground">
+                        {Number(tokenStats.files_uploaded ?? 0).toLocaleString()}
                       </p>
                     </div>
-                    <div className="rounded-lg border border-border bg-secondary/30 p-3">
+
+                    <div className="rounded-lg border border-border/50 bg-muted/30 p-4">
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Download className="h-4 w-4" />
-                        <span className="text-xs">Files Downloaded</span>
+                        <span className="text-xs font-medium">Files Downloaded</span>
                       </div>
-                      <p className="mt-1 text-xl font-semibold text-foreground">
-                        {tokenStats.files_downloaded.toLocaleString()}
+                      <p className="mt-2 text-2xl font-bold text-foreground">
+                        {Number(tokenStats.files_downloaded ?? 0).toLocaleString()}
                       </p>
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="mt-3 text-sm text-muted-foreground">
                     No statistics available
                   </p>
                 )}
               </div>
 
               {/* Dates */}
-              <div className="flex gap-6 text-sm">
-                <div>
-                  <p className="text-muted-foreground">Created</p>
-                  <p className="font-medium text-foreground">
-                    {formatDate(selectedToken.created_at)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Expires</p>
-                  <p
-                    className={cn(
-                      'font-medium',
-                      isExpired(selectedToken.expires_at)
-                        ? 'text-destructive'
-                        : 'text-foreground'
-                    )}
-                  >
-                    {formatDate(selectedToken.expires_at)}
-                    {isExpired(selectedToken.expires_at) && (
-                      <span className="ml-2 text-xs">(Expired)</span>
-                    )}
-                  </p>
-                </div>
-                {selectedToken.last_used_at && (
+              <div className="rounded-lg border border-border/50 bg-card/50 p-5">
+                <p className="mb-3 text-sm font-semibold text-foreground">
+                  Key Dates
+                </p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <div>
-                    <p className="text-muted-foreground">Last Used</p>
-                    <p className="font-medium text-foreground">
-                      {formatDate(selectedToken.last_used_at)}
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+                      Created
+                    </p>
+                    <p className="mt-1.5 font-medium text-foreground">
+                      {formatDate(selectedToken.created_at)}
                     </p>
                   </div>
-                )}
+
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+                      Expires
+                    </p>
+                    <p
+                      className={cn(
+                        'mt-1.5 font-medium',
+                        isExpired(selectedToken.expires_at)
+                          ? 'text-destructive'
+                          : 'text-foreground'
+                      )}
+                    >
+                      {formatDate(selectedToken.expires_at)}
+                      {isExpired(selectedToken.expires_at) && (
+                        <span className="block text-xs mt-1">(Expired)</span>
+                      )}
+                    </p>
+                  </div>
+
+                  {selectedToken.last_used_at && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+                        Last Used
+                      </p>
+                      <p className="mt-1.5 font-medium text-foreground">
+                        {formatDate(selectedToken.last_used_at)}
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}

@@ -182,12 +182,10 @@ export default function Dashboard() {
     let failCount = 0;
 
     // Process queue sequentially
-    // We use a traditional for loop to handle async await correctly and update state
     const queueIds = uploadQueue.map(item => item.id);
 
     for (let i = 0; i < queueIds.length; i++) {
       const itemId = queueIds[i];
-      // Get latest state for this item (though file obj doesn't change)
       const currentItem = uploadQueue.find(item => item.id === itemId);
       if (!currentItem) continue;
 
@@ -200,48 +198,12 @@ export default function Dashboard() {
       setUploadProgress(0);
 
       try {
-        // Get presigned upload URL
-        const { file_id, upload_url } = await filesApi.generateUploadUrl(
-          file.name,
-          file.size,
-          file.type || 'application/octet-stream',
-          selectedUploadFolder
+        // Upload file directly to backend (backend handles S3 upload internally)
+        await filesApi.uploadFile(
+          file,
+          selectedUploadFolder,
+          (progress) => setUploadProgress(progress)
         );
-
-        // Upload to S3 with progress tracking
-        await new Promise<void>((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-
-          xhr.upload.addEventListener('progress', (e) => {
-            if (e.lengthComputable) {
-              const percentComplete = Math.round((e.loaded / e.total) * 100);
-              setUploadProgress(percentComplete);
-            }
-          });
-
-          xhr.addEventListener('load', () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              resolve();
-            } else {
-              reject(new Error(`S3 upload failed: ${xhr.status} ${xhr.statusText}`));
-            }
-          });
-
-          xhr.addEventListener('error', () => {
-            reject(new Error('Network error during upload'));
-          });
-
-          xhr.addEventListener('abort', () => {
-            reject(new Error('Upload was aborted'));
-          });
-
-          xhr.open('PUT', upload_url);
-          xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
-          xhr.send(file);
-        });
-
-        // Complete upload
-        await filesApi.completeUpload(file_id);
 
         // Update status to success
         setUploadQueue(prev => prev.map(item =>
@@ -256,11 +218,6 @@ export default function Dashboard() {
         if (error instanceof Error) {
           console.error('Error Message:', error.message);
           console.error('Error Stack:', error.stack);
-        }
-
-        // Log S3/Network specific info if available
-        if (typeof error === 'object' && error !== null && 'status' in error) {
-          console.error('HTTP Status:', (error as any).status);
         }
 
         // Update status to error
@@ -331,21 +288,21 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-4 flex flex-col">
-        {/* Header - Minimalist */}
-        <div className="flex items-center justify-between px-1">
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-semibold tracking-tight">
+      <div className="space-y-6 flex flex-col">
+        {/* Header - Clean & Modern */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex-1">
+            <h2 className="text-3xl font-bold tracking-tight text-foreground">
               {currentFolder ? (
-                <div className="flex items-center gap-2 text-foreground/80">
+                <div className="flex items-center gap-3 text-lg md:text-3xl">
                   <span
                     onClick={() => setCurrentFolder(null)}
-                    className="cursor-pointer hover:text-foreground transition-colors"
+                    className="cursor-pointer hover:text-primary transition-colors duration-200"
                   >
                     Files
                   </span>
-                  <span className="text-muted-foreground/40">/</span>
-                  <span className="text-foreground">{currentFolder}</span>
+                  <span className="text-muted-foreground/30">/</span>
+                  <span className="text-primary font-semibold">{currentFolder}</span>
                 </div>
               ) : (
                 'Files'
@@ -353,19 +310,19 @@ export default function Dashboard() {
             </h2>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={fetchFiles} className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground">
+            <Button variant="outline" size="icon" onClick={fetchFiles} className="h-9 w-9 hover:bg-muted/50 transition-colors" title="Refresh">
               <RefreshCw className="h-4 w-4" />
             </Button>
             <Button
-              size="sm"
               onClick={() => {
                 setSelectedUploadFolder(currentFolder || 'root');
                 setUploadDialogOpen(true);
               }}
-              className="h-8 text-xs font-medium px-3"
+              className="h-9 px-4 font-medium hover:shadow-md transition-shadow"
             >
-              <Upload className="mr-2 h-3.5 w-3.5" />
-              Upload
+              <Upload className="mr-2 h-4 w-4" />
+              <span className="hidden sm:inline">Upload</span>
+              <span className="sm:hidden">Add</span>
             </Button>
           </div>
         </div>
@@ -378,23 +335,24 @@ export default function Dashboard() {
           /* Folder View - Minimalist List */
           <div className="rounded-lg border bg-card/50 shadow-sm flex flex-col">
             {currentFiles.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
-                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-secondary/50">
-                  <Folder className="h-6 w-6 text-muted-foreground/40" />
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-12 space-y-4">
+                <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-secondary/50">
+                  <Folder className="h-8 w-8 text-muted-foreground/40" />
                 </div>
-                <h3 className="text-sm font-medium text-foreground">Empty folder</h3>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Upload files to get started.
-                </p>
+                <div>
+                  <h3 className="text-base font-semibold text-foreground">Folder is empty</h3>
+                  <p className="mt-1.5 text-sm text-muted-foreground">
+                    Click upload to add files to this folder.</p>
+                </div>
                 <Button
                   variant="outline"
-                  size="sm"
-                  className="mt-4 h-7 text-xs"
+                  className="mt-4 h-8 text-sm font-medium"
                   onClick={() => {
                     setSelectedUploadFolder(currentFolder || 'root');
                     setUploadDialogOpen(true);
                   }}
                 >
+                  <Upload className="mr-2 h-4 w-4" />
                   Upload File
                 </Button>
               </div>
@@ -405,40 +363,42 @@ export default function Dashboard() {
                   return (
                     <div
                       key={file.id}
-                      className="group flex items-center justify-between p-2.5 px-4 hover:bg-muted/40 transition-colors"
+                      className="group flex items-center justify-between p-3 px-4 hover:bg-muted/40 transition-colors"
                     >
                       <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-secondary/30 text-muted-foreground group-hover:bg-secondary/60 transition-colors">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-secondary/30 text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-all">
                           <FileIcon className="h-4 w-4" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate group-hover:text-primary transition-colors">
+                          <p className="text-sm font-semibold text-foreground truncate group-hover:text-primary transition-colors">
                             {file.original_filename}
                           </p>
-                          <div className="flex items-center gap-2 text-[10px] text-muted-foreground/70">
-                            <span>{formatFileSize(file.file_size)}</span>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground/70">
+                            <span className="font-medium">{formatFileSize(file.file_size)}</span>
                             <span>•</span>
                             <span>{formatDate(file.created_at)}</span>
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Button
                           variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                          size="sm"
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted/50"
                           onClick={() => handleDownload(file)}
                           disabled={file.upload_status !== 'completed'}
+                          title="Download"
                         >
-                          <Download className="h-3.5 w-3.5" />
+                          <Download className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          size="sm"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-red-50 dark:hover:bg-red-950/20"
                           onClick={() => handleDelete(file)}
+                          title="Delete"
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
@@ -451,8 +411,10 @@ export default function Dashboard() {
           /* Root View - Split Layout */
           <div className="flex flex-col gap-6">
 
-            {/* FOLDERS Grid - Minimalist Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {/* FOLDERS Grid - Modern Cards */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest px-1 mt-2">Folders</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {folders.map((folder) => (
                 <button
                   key={folder.path}
@@ -477,17 +439,18 @@ export default function Dashboard() {
                   </div>
                 </button>
               ))}
+              </div>
             </div>
 
-            {/* ROOT FILES List - Minimalist */}
+            {/* ROOT FILES List - Modern */}
             <div className="rounded-lg border bg-card/50 shadow-sm flex flex-col">
-              <div className="px-4 py-2 border-b border-border/50 bg-muted/20">
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Root Files</h3>
+              <div className="px-4 py-3 border-b border-border/50 bg-muted/20">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Root Files</h3>
               </div>
 
               {rootFiles.length === 0 ? (
-                <div className="p-8 text-center">
-                  <p className="text-xs text-muted-foreground">No files in root directory</p>
+                <div className="p-12 text-center space-y-2">
+                  <p className="text-sm text-muted-foreground">No files in root directory yet</p>
                 </div>
               ) : (
                 <div className="divide-y divide-border/50">
@@ -499,37 +462,39 @@ export default function Dashboard() {
                         className="group flex items-center justify-between p-2 px-4 hover:bg-muted/40 transition-colors"
                       >
                         <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-secondary/30 text-muted-foreground group-hover:bg-secondary/60 transition-colors">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-secondary/30 text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-all">
                             <FileIcon className="h-4 w-4" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-foreground truncate group-hover:text-primary transition-colors">
+                            <p className="text-sm font-semibold text-foreground truncate group-hover:text-primary transition-colors">
                               {file.original_filename}
                             </p>
-                            <div className="flex items-center gap-2 text-[10px] text-muted-foreground/70">
-                              <span>{formatFileSize(file.file_size)}</span>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground/70">
+                              <span className="font-medium">{formatFileSize(file.file_size)}</span>
                               <span>•</span>
                               <span>{formatDate(file.created_at)}</span>
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                           <Button
                             variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                            size="sm"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted/50"
                             onClick={() => handleDownload(file)}
                             disabled={file.upload_status !== 'completed'}
+                            title="Download"
                           >
-                            <Download className="h-3.5 w-3.5" />
+                            <Download className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            size="sm"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-red-50 dark:hover:bg-red-950/20"
                             onClick={() => handleDelete(file)}
+                            title="Delete"
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </div>
@@ -545,10 +510,10 @@ export default function Dashboard() {
       {/* Upload Dialog */}
       <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col gap-0 p-0 overflow-hidden">
-          <DialogHeader className="p-4 pb-2 border-b">
-            <DialogTitle className="text-lg">Upload Files</DialogTitle>
-            <DialogDescription className="text-xs">
-              Select up to 3 files to upload.
+          <DialogHeader className="p-5 pb-3 border-b border-border/50 bg-muted/20">
+            <DialogTitle className="text-lg font-bold tracking-tight">Upload Files</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Select up to 3 files to upload at once.
             </DialogDescription>
           </DialogHeader>
 
@@ -582,8 +547,8 @@ export default function Dashboard() {
               >
                 <div className="text-center space-y-1">
                   <Upload className="mx-auto h-8 w-8 text-muted-foreground/60" />
-                  <p className="text-xs text-muted-foreground font-medium">Click or drag files here</p>
-                  <p className="text-[10px] text-muted-foreground/60">Max 3 files</p>
+                  <p className="text-sm font-semibold text-muted-foreground">Click or drag files here</p>
+                  <p className="text-xs text-muted-foreground/60">Max 3 files at a time</p>
                 </div>
                 <input
                   type="file"
@@ -596,38 +561,38 @@ export default function Dashboard() {
             )}
 
             {uploadQueue.length > 0 && (
-              <div className="border rounded-md divide-y">
+              <div className="border rounded-md divide-y bg-muted/10">
                 {uploadQueue.map((item) => (
-                  <div key={item.id} className="p-2.5 relative group">
-                    <div className="flex items-center gap-2.5">
+                  <div key={item.id} className="p-3 relative group">
+                    <div className="flex items-center gap-3">
                       <div className={cn(
-                        "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground",
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground",
                         item.status === 'success' && "bg-green-100 text-green-600 dark:bg-green-900/30",
                         item.status === 'error' && "bg-red-100 text-red-600 dark:bg-red-900/30",
                         item.status === 'uploading' && "bg-primary/10 text-primary"
                       )}>
-                        {item.status === 'success' ? <CheckCircle2 className="h-3.5 w-3.5" /> :
-                          item.status === 'error' ? <AlertCircle className="h-3.5 w-3.5" /> :
-                            <FileIcon className="h-3.5 w-3.5" />}
+                        {item.status === 'success' ? <CheckCircle2 className="h-4 w-4" /> :
+                          item.status === 'error' ? <AlertCircle className="h-4 w-4" /> :
+                            <FileIcon className="h-4 w-4" />}
                       </div>
 
-                      <div className="flex-1 min-w-0 grid gap-0.5">
+                      <div className="flex-1 min-w-0 grid gap-1">
                         <div className="flex items-center justify-between">
-                          <p className="text-xs font-medium truncate pr-2">{item.file.name}</p>
-                          <span className="text-[10px] text-muted-foreground shrink-0">{formatFileSize(item.file.size)}</span>
+                          <p className="text-sm font-semibold truncate pr-2">{item.file.name}</p>
+                          <span className="text-xs text-muted-foreground shrink-0 font-medium">{formatFileSize(item.file.size)}</span>
                         </div>
 
-                        <div className="h-1.5 w-full flex items-center">
+                        <div className="h-2 w-full flex items-center">
                           {item.status === 'uploading' ? (
                             <div className="w-full flex items-center gap-2">
-                              <Progress value={uploadProgress} className="h-1.5 flex-1" />
-                              <span className="text-[10px] tabular-nums">{uploadProgress}%</span>
+                              <Progress value={uploadProgress} className="h-2 flex-1" />
+                              <span className="text-xs tabular-nums font-medium">{uploadProgress}%</span>
                             </div>
                           ) : (
-                            <p className="text-[10px] text-muted-foreground">
-                              {item.status === 'pending' && <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> Waiting...</span>}
-                              {item.status === 'success' && <span className="text-green-600 dark:text-green-400">Completed</span>}
-                              {item.status === 'error' && <span className="text-destructive">Failed</span>}
+                            <p className="text-xs text-muted-foreground">
+                              {item.status === 'pending' && <span className="flex items-center gap-1 text-yellow-600 dark:text-yellow-500"><Clock className="h-3 w-3" /> Waiting...</span>}
+                              {item.status === 'success' && <span className="text-green-600 dark:text-green-400 font-medium">Completed</span>}
+                              {item.status === 'error' && <span className="text-destructive font-medium">Failed</span>}
                               {item.status === 'idle' && "Ready to upload"}
                             </p>
                           )}
@@ -636,10 +601,11 @@ export default function Dashboard() {
 
                       {item.status === 'idle' && !isUploading && (
                         <button
-                          className="ml-2 p-1 text-muted-foreground/50 hover:text-destructive transition-colors"
+                          className="ml-2 p-1 text-muted-foreground/50 hover:text-destructive hover:bg-red-50 dark:hover:bg-red-950/20 rounded transition-colors"
                           onClick={() => removeQueueItem(item.id)}
+                          title="Remove"
                         >
-                          <X className="h-3.5 w-3.5" />
+                          <X className="h-4 w-4" />
                         </button>
                       )}
                     </div>
@@ -649,25 +615,23 @@ export default function Dashboard() {
             )}
           </div>
 
-          <DialogFooter className="p-4 pt-2 border-t mt-auto">
+          <DialogFooter className="p-4 pt-3 border-t border-border/50 mt-auto gap-2">
             <Button
               variant="outline"
-              size="sm"
               onClick={() => {
                 setUploadDialogOpen(false);
                 setUploadQueue([]);
                 setUploadProgress(0);
               }}
               disabled={isUploading}
-              className="h-8 text-xs"
+              className="h-9 text-sm font-medium"
             >
               Cancel
             </Button>
             <Button
-              size="sm"
               onClick={handleUpload}
               disabled={uploadQueue.length === 0 || isUploading}
-              className="h-8 text-xs"
+              className="h-9 text-sm font-medium hover:shadow-md transition-shadow"
             >
               {isUploading ? (
                 <>

@@ -1,5 +1,5 @@
 // API Configuration and Helpers
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8082';
+import { API_BASE_URL, REQUEST_TIMEOUT, storage } from '@/config';
 
 interface ApiError {
   message: string;
@@ -11,7 +11,7 @@ class ApiClient {
   private isRefreshing = false;
   private failedQueue: Array<{
     resolve: (value: unknown) => void;
-    reject: (reason?: any) => void;
+    reject: (reason?: unknown) => void;
   }> = [];
 
   constructor(baseUrl: string) {
@@ -24,7 +24,7 @@ class ApiClient {
     };
 
     if (includeAuth) {
-      const token = localStorage.getItem('access_token');
+      const token = storage.getItem('access_token');
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
@@ -80,9 +80,9 @@ class ApiClient {
   }
 
   private handleLogout() {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
+    storage.removeItem('access_token');
+    storage.removeItem('refresh_token');
+    storage.removeItem('user');
     window.dispatchEvent(new CustomEvent('auth:logout'));
   }
 
@@ -99,77 +99,97 @@ class ApiClient {
         headers,
         body: data ? JSON.stringify(data) : undefined,
       };
-      return fetch(`${this.baseUrl}${endpoint}`, config);
-    };
 
-    const response = await doRequest();
-
-    // Handle 401 Unauthorized
-    if (response.status === 401) {
-      // If this is a login or refresh request, fail immediately
-      if (endpoint.includes('/auth/tenant/login') || endpoint.includes('/auth/refresh')) {
-        this.handleLogout();
-        return this.handleResponse<T>(response);
-      }
-
-      // If it's change-password, 401 likely means incorrect old password, not invalid token.
-      // Return response to be handled by caller (will throw due to success: false or !ok)
-      if (endpoint.includes('/change-password')) {
-        return this.handleResponse<T>(response);
-      }
-
-      if (this.isRefreshing) {
-        // If already refreshing, queue this request
-        return new Promise((resolve, reject) => {
-          this.failedQueue.push({ resolve, reject });
-        }).then(() => {
-          return this.request<T>(method, endpoint, data, includeAuth);
-        });
-      }
-
-      const refreshToken = localStorage.getItem('refresh_token');
-      if (!refreshToken) {
-        this.handleLogout();
-        return this.handleResponse<T>(response);
-      }
-
-      this.isRefreshing = true;
+      // Add timeout using AbortController
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+      config.signal = controller.signal;
 
       try {
-        // Attempt to refresh token
-        const refreshResponse = await fetch(`${this.baseUrl}/api/v1/auth/refresh`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ refresh_token: refreshToken }),
-        });
-
-        if (!refreshResponse.ok) {
-          throw new Error('Refresh failed');
-        }
-
-        const refreshData = await refreshResponse.json();
-        const newAccessToken = refreshData.data?.access_token || refreshData.access_token;
-
-        if (newAccessToken) {
-          localStorage.setItem('access_token', newAccessToken);
-          // Retry original request
-          this.isRefreshing = false;
-          this.processQueue(null, newAccessToken);
-          return this.request<T>(method, endpoint, data, includeAuth);
-        } else {
-          throw new Error('No access token in refresh response');
-        }
-      } catch (error) {
-        this.isRefreshing = false;
-        this.processQueue(error as Error);
-        this.handleLogout();
-        throw error;
+        return await fetch(`${this.baseUrl}${endpoint}`, config);
+      } finally {
+        clearTimeout(timeoutId);
       }
-    }
+    };
 
-    return this.handleResponse<T>(response);
+    try {
+      const response = await doRequest();
+
+      // Handle 401 Unauthorized
+      if (response.status === 401) {
+        // If this is a login or refresh request, fail immediately
+        if (endpoint.includes('/auth/tenant/login') || endpoint.includes('/auth/refresh')) {
+          this.handleLogout();
+          return this.handleResponse<T>(response);
+        }
+
+        // If it's change-password, 401 likely means incorrect old password, not invalid token.
+        // Return response to be handled by caller (will throw due to success: false or !ok)
+        if (endpoint.includes('/change-password')) {
+          return this.handleResponse<T>(response);
+        }
+
+        if (this.isRefreshing) {
+          // If already refreshing, queue this request
+          return new Promise((resolve, reject) => {
+            this.failedQueue.push({ resolve, reject });
+          }).then(() => {
+            return this.request<T>(method, endpoint, data, includeAuth);
+          });
+        }
+
+        const refreshToken = storage.getItem('refresh_token');
+        if (!refreshToken) {
+          this.handleLogout();
+          return this.handleResponse<T>(response);
+        }
+
+        this.isRefreshing = true;
+
+        try {
+          // Attempt to refresh token
+          const refreshResponse = await fetch(`${this.baseUrl}/api/v1/auth/refresh`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ refresh_token: refreshToken }),
+          });
+
+          if (!refreshResponse.ok) {
+            throw new Error('Refresh failed');
+          }
+
+          const refreshData = await refreshResponse.json();
+          const newAccessToken = refreshData.data?.access_token || refreshData.access_token;
+
+          if (newAccessToken) {
+            storage.setItem('access_token', newAccessToken);
+            // Retry original request
+            this.isRefreshing = false;
+            this.processQueue(null, newAccessToken);
+            return this.request<T>(method, endpoint, data, includeAuth);
+          } else {
+            throw new Error('No access token in refresh response');
+          }
+        } catch (error) {
+          this.isRefreshing = false;
+          this.processQueue(error as Error);
+          this.handleLogout();
+          throw error;
+        }
+      }
+
+      return this.handleResponse<T>(response);
+    } catch (error) {
+      // Handle timeout and abort errors
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          throw new Error(`Request timeout after ${REQUEST_TIMEOUT}ms`);
+        }
+      }
+      throw error;
+    }
   }
 
   async get<T>(endpoint: string): Promise<T> {
@@ -269,6 +289,61 @@ export const authApi = {
 // Files API
 export const filesApi = {
   list: () => api.get<FileItem[]>('/api/v1/files'),
+
+  uploadFile: (file: File, uploadTo: string = 'root', onProgress?: (progress: number) => void): Promise<unknown> => {
+    return new Promise((resolve, reject) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_to', uploadTo);
+
+      const xhr = new XMLHttpRequest();
+      const token = storage.getItem('access_token');
+
+      // Add timeout
+      const timeoutId = setTimeout(() => {
+        xhr.abort();
+        reject(new Error(`Upload timeout after ${REQUEST_TIMEOUT}ms`));
+      }, REQUEST_TIMEOUT);
+
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable && onProgress) {
+          const percentComplete = Math.round((e.loaded / e.total) * 100);
+          onProgress(percentComplete);
+        }
+      });
+
+      xhr.addEventListener('load', () => {
+        clearTimeout(timeoutId);
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const response = JSON.parse(xhr.responseText);
+            resolve(response);
+          } catch {
+            resolve(xhr.responseText);
+          }
+        } else {
+          reject(new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`));
+        }
+      });
+
+      xhr.addEventListener('error', () => {
+        clearTimeout(timeoutId);
+        reject(new Error('Network error during upload'));
+      });
+
+      xhr.addEventListener('abort', () => {
+        clearTimeout(timeoutId);
+        reject(new Error('Upload was aborted'));
+      });
+
+      xhr.open('POST', `${API_BASE_URL}/api/v1/files/upload`);
+      if (token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      }
+
+      xhr.send(formData);
+    });
+  },
 
   generateUploadUrl: (filename: string, fileSize: number, mimeType: string, uploadTo?: string) =>
     api.post<UploadUrlResponse>('/api/v1/files/upload-url', {
