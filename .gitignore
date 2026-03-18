@@ -1,3 +1,6 @@
+# Environment variables
+.env
+
 # Logs
 logs
 *.log
@@ -7,12 +10,10 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# Dependencies
-node_modules
-.pnp
-.pnp.js
+# Dependency directories
+node_modules/
 
-# Build Output
+# Build output
 dist
 dist-ssr
 build
